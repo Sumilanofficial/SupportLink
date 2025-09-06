@@ -1,0 +1,28 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Base application theme. -->
+    <style name="Base.Theme.GestureFlow" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Customize your light theme here. -->
+        <!-- <item name="colorPrimary">@color/my_light_primary</item> -->
+    </style>
+    <style name="CustomHighBold"
+        ><item name="android:fontFamily">@font/circularstd_black</item>
+    </style>
+    <style name="CustomLowBold">
+        <item name="android:fontFamily">@font/circularstd_bold</item>
+    </style>
+    <style name="CustomLow"
+        >
+        <item name="android:fontFamily">@font/circularstd_book</item>
+    </style>
+    <style name="CustomMedium">
+        <item name="android:fontFamily">@font/circularstd_medium</item>
+    </style>
+
+
+    <style name="Theme.GestureFlow" parent="Base.Theme.GestureFlow" />
+
+    <style name="ThemeOverlay.GestureFlow.FullscreenContainer" parent="">
+        <item name="fullscreenBackgroundColor">@color/light_blue_600</item>
+        <item name="fullscreenTextColor">@color/light_blue_A200</item>
+    </style>
+</resources>

@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    >
+
+
+
+    <item
+        android:id="@+id/bottom_home"
+        android:icon="@drawable/baseline_home_24"
+        android:title="Home"
+        android:actionLayout="@layout/fragment_home"/>
+    <item
+        android:id="@+id/bottom_instagram"
+        android:icon="@drawable/baseline_camera_alt_24"
+        android:title="Instagram"
+        android:actionLayout="@layout/fragment_home"/>
+
+
+    <item
+        android:id="@+id/bottom_messagest"
+        android:icon="@drawable/baseline_message_24"
+        android:title="Messages"
+        android:actionLayout="@layout/fragment_home"/>
+    <item
+        android:id="@+id/bottom_call"
+        android:icon="@drawable/baseline_call_24"
+        android:title="Call"
+        android:actionLayout="@layout/fragment_home"/>
+</menu>

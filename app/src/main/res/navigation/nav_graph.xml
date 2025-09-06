@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/homeFragment2">
+
+    <fragment
+        android:id="@+id/callFragment"
+        android:name="com.example.gestureflow.CallFragment"
+        android:label="fragment_call"
+        tools:layout="@layout/fragment_call" />
+    <fragment
+        android:id="@+id/instagramFragment"
+        android:name="com.example.gestureflow.InstagramFragment"
+        android:label="fragment_instagram"
+        tools:layout="@layout/fragment_instagram" />
+    <fragment
+        android:id="@+id/messageFragment"
+        android:name="com.example.gestureflow.MessageFragment"
+        android:label="fragment_message"
+        tools:layout="@layout/fragment_message" />
+    <fragment
+        android:id="@+id/whatsappFragment"
+        android:name="com.example.gestureflow.TextToVoiceFragment"
+        android:label="fragment_whatsapp"
+        tools:layout="@layout/fragment_whatsapp" />
+    <fragment
+        android:id="@+id/homeFragment2"
+        android:name="com.example.gestureflow.HomeFragment"
+        android:label="HomeFragment" />
+    <fragment
+        android:id="@+id/instaFeedFragment"
+        android:name="com.example.gestureflow.InstaFeedFragment"
+        android:label="fragment_insta_feed"
+        tools:layout="@layout/fragment_insta_feed" />
+    <fragment
+        android:id="@+id/keyboardFragment"
+        android:name="com.example.gestureflow.KeyboardFragment"
+        android:label="fragment_keyboard"
+        tools:layout="@layout/fragment_keyboard" />
+    <fragment
+        android:id="@+id/instaReelFragment"
+        android:name="com.example.gestureflow.InstaReelFragment"
+        android:label="fragment_insta_reel"
+        tools:layout="@layout/fragment_insta_reel" />
+    <fragment
+        android:id="@+id/fixedMessageFragment"
+        android:name="com.example.gestureflow.FixedMessageFragment"
+        android:label="fragment_fixed_message"
+        tools:layout="@layout/fragment_fixed_message" >
+    <!-- Define argument to receive phone number -->
+    <argument
+        android:name="phoneNumber"
+        app:argType="string"
+        android:defaultValue="" />
+    </fragment>
+    <fragment
+        android:id="@+id/numberInputFragement"
+        android:name="com.example.gestureflow.NumberInputFragement"
+        android:label="NumberInputFragement" >
+    <action
+        android:id="@+id/action_numberInputFragment_to_fixedMessageFragment"
+        app:destination="@id/fixedMessageFragment" />
+    </fragment>
+    <fragment
+        android:id="@+id/textToSpeechFragment"
+        android:name="com.example.gestureflow.TextToSpeechFragment"
+        android:label="TextToSpeechFragment" />
+    <fragment
+        android:id="@+id/textToVoice2Fragment"
+        android:name="com.example.gestureflow.TextToVoice2Fragment"
+        android:label="TextToVoice2Fragment" />
+    <fragment
+        android:id="@+id/newsFragment"
+        android:name="com.example.gestureflow.NewsFragment"
+        android:label="NewsFragment" />
+    <fragment
+        android:id="@+id/whatsappFragment2"
+        android:name="com.example.gestureflow.WhatsappFragment"
+        android:label="WhatsappFragment" />
+
+</navigation>
