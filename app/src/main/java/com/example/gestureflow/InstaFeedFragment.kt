@@ -27,74 +27,78 @@ import java.util.concurrent.Executors
 
 class InstaFeedFragment : Fragment() {
 
-    // --- Configuration Constants ---
+    // --- Threshold Configurations for gestures ---
     companion object {
-        private const val EYE_CLOSED_THRESHOLD = 0.4f // Lower for more sensitivity
-        private const val GESTURE_CONFIRMATION_FRAMES = 5 // Require 5 consecutive frames to confirm a gesture
-        private const val DOUBLE_BLINK_TIME_MS = 600 // Time in ms to detect a double blink
+        private const val HEAD_TURN_RIGHT_THRESHOLD = -12f   // Head yaw threshold (look right)
+        private const val HEAD_TILT_UP_THRESHOLD = 8f        // Head pitch threshold (look up)
+        private const val HEAD_TILT_DOWN_THRESHOLD = -8f     // Head pitch threshold (look down)
+        private const val EYE_CLOSED_THRESHOLD = 0.4f        // Eye closure probability
+        private const val CLOSE_EYES_CONFIRMATION_FRAMES = 18 // ~700ms closed eyes
+        private const val GESTURE_CONFIRMATION_FRAMES = 3     // Frames to confirm gesture
+        private const val ACTION_COOLDOWN_MS = 1500L          // Cooldown (ms) between actions
     }
 
-    // --- UI Elements ---
+    // --- UI elements ---
     private lateinit var previewView: PreviewView
     private lateinit var messageText: TextView
     private lateinit var webView: WebView
     private var mediaPlayer: MediaPlayer? = null
 
-    // --- Asynchronous Processing ---
+    // --- Camera & face detection ---
     private lateinit var cameraExecutor: ExecutorService
     private lateinit var faceDetector: FaceDetector
 
-    // --- State Management ---
+    // --- State management ---
     private var isInstagramOpen = false
-    private var leftEyeClosedFrames = 0
-    private var rightEyeClosedFrames = 0
+    private var lastActionTimestamp = 0L
+
+    // Counters for stabilizing gesture detection
+    private var lookRightFrames = 0
+    private var lookUpFrames = 0
+    private var lookDownFrames = 0
     private var bothEyesClosedFrames = 0
-    private var lastBlinkTime: Long = 0
-    private var blinkCount = 0
 
-    // --- Fragment Lifecycle Methods ---
-
+    // --- Lifecycle ---
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
-    ): View? {
-        return inflater.inflate(R.layout.fragment_insta_feed, container, false)
-    }
+    ): View? = inflater.inflate(R.layout.fragment_insta_feed, container, false)
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        initializeUI(view)
-        setupWebView()
-        setupFaceDetector()
+        initializeUI(view)       // Setup UI views
+        setupWebView()           // Setup Instagram WebView
+        setupFaceDetector()      // Setup ML Kit face detector
         cameraExecutor = Executors.newSingleThreadExecutor()
-        startCamera()
+        startCamera()            // Start CameraX with analysis
     }
 
     override fun onPause() {
         super.onPause()
-        webView.onPause()
+        webView.onPause()        // Pause WebView when fragment not visible
     }
 
     override fun onResume() {
         super.onResume()
-        webView.onResume()
+        webView.onResume()       // Resume WebView
     }
 
     override fun onDestroyView() {
         super.onDestroyView()
         (webView.parent as? ViewGroup)?.removeView(webView)
-        webView.destroy()
+        webView.destroy()        // Destroy WebView
         cameraExecutor.shutdown()
         faceDetector.close()
+        mediaPlayer?.release()
     }
 
-    // --- Initialization ---
-
+    // --- UI Initialization ---
     private fun initializeUI(view: View) {
         previewView = view.findViewById(R.id.camera_preview)
         messageText = view.findViewById(R.id.text_message)
         webView = view.findViewById(R.id.webview)
     }
 
+    // Configure ML Kit face detector
     private fun setupFaceDetector() {
         val options = FaceDetectorOptions.Builder()
             .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
@@ -103,154 +107,150 @@ class InstaFeedFragment : Fragment() {
         faceDetector = com.google.mlkit.vision.face.FaceDetection.getClient(options)
     }
 
+    // Setup WebView for Instagram
     @SuppressLint("SetJavaScriptEnabled")
     private fun setupWebView() {
         CookieManager.getInstance().setAcceptCookie(true)
         webView.webViewClient = WebViewClient()
-        val webSettings = webView.settings
-        webSettings.javaScriptEnabled = true
-        webSettings.domStorageEnabled = true
-        webSettings.databaseEnabled = true
-        webSettings.cacheMode = WebSettings.LOAD_DEFAULT
+        webView.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
+            cacheMode = WebSettings.LOAD_DEFAULT
+        }
     }
 
-    // --- Camera and Face Detection ---
-
+    // --- Camera + Frame Analysis ---
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
+
+            // Preview stream
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
+
+            // Analyzer for ML Kit
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
-                .also {
-                    it.setAnalyzer(cameraExecutor) { imageProxy ->
-                        processImageProxy(imageProxy)
-                    }
-                }
-            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
+                .also { it.setAnalyzer(cameraExecutor, this::processImageProxy) }
 
+            val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
             try {
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(viewLifecycleOwner, cameraSelector, preview, imageAnalysis)
             } catch (exc: Exception) {
                 Log.e("CameraX", "Use case binding failed", exc)
             }
-
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
+    // Convert camera frame into InputImage and run face detection
     @androidx.annotation.OptIn(ExperimentalGetImage::class)
     private fun processImageProxy(imageProxy: ImageProxy) {
+        if (view == null) { imageProxy.close(); return }
         val mediaImage = imageProxy.image
-        if (mediaImage != null && view != null) {
+        if (mediaImage != null) {
             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
             faceDetector.process(image)
-                .addOnSuccessListener { faces ->
-                    processFaces(faces)
-                    imageProxy.close()
-                }
-                .addOnFailureListener {
-                    imageProxy.close()
-                }
+                .addOnSuccessListener { faces -> processFaces(faces) } // Process detected faces
+                .addOnCompleteListener { imageProxy.close() }
         } else {
             imageProxy.close()
         }
     }
 
-    // --- Gesture Logic ---
-
+    // --- Gesture Detection Logic ---
     private fun processFaces(faces: List<Face>) {
         if (faces.isEmpty() || view == null) {
             updateUIMessage("No Face Detected")
             return
         }
 
-        val face = faces[0]
-        val leftEyeOpenProb = face.leftEyeOpenProbability ?: 1.0f
-        val rightEyeOpenProb = face.rightEyeOpenProbability ?: 1.0f
-
-        val isLeftEyeClosed = leftEyeOpenProb < EYE_CLOSED_THRESHOLD
-        val isRightEyeClosed = rightEyeOpenProb < EYE_CLOSED_THRESHOLD
-
-        // --- State Counters ---
-        if (isLeftEyeClosed && !isRightEyeClosed) leftEyeClosedFrames++ else leftEyeClosedFrames = 0
-        if (isLeftEyeClosed && isRightEyeClosed) bothEyesClosedFrames++ else bothEyesClosedFrames = 0
-
-        // --- Gesture Triggers ---
-        if (leftEyeClosedFrames >= GESTURE_CONFIRMATION_FRAMES) {
-            openInstagram()
-            leftEyeClosedFrames = 0 // Reset after action
-        }
-
-        if (bothEyesClosedFrames >= GESTURE_CONFIRMATION_FRAMES) {
-            handleBothEyesClosed()
-            bothEyesClosedFrames = 0 // Reset after action
-        }
-
-        detectDoubleBlink(isLeftEyeClosed && isRightEyeClosed)
-        updateUIMessage("Face Detected")
-    }
-
-    private fun handleBothEyesClosed() {
-        if (isInstagramOpen) {
-            playbackSound()
-            closeInstagram()
-        }
-    }
-
-    private fun detectDoubleBlink(isBlinking: Boolean) {
         val currentTime = System.currentTimeMillis()
-        if (isBlinking) {
-            if (currentTime - lastBlinkTime > DOUBLE_BLINK_TIME_MS) {
-                blinkCount = 1
-            } else {
-                blinkCount++
+        if (currentTime - lastActionTimestamp < ACTION_COOLDOWN_MS) return // Prevent too frequent actions
+
+        val face = faces[0]
+        val headYaw = face.headEulerAngleY   // Left-right head movement
+        val headPitch = face.headEulerAngleX // Up-down head movement
+
+        // Count frames for each gesture
+        if (headYaw < HEAD_TURN_RIGHT_THRESHOLD) lookRightFrames++ else lookRightFrames = 0
+        if (headPitch > HEAD_TILT_UP_THRESHOLD) lookUpFrames++ else lookUpFrames = 0
+        if (headPitch < HEAD_TILT_DOWN_THRESHOLD) lookDownFrames++ else lookDownFrames = 0
+
+        // Both eyes closed counter
+        val areEyesClosed = (face.leftEyeOpenProbability ?: 1f) < EYE_CLOSED_THRESHOLD &&
+                (face.rightEyeOpenProbability ?: 1f) < EYE_CLOSED_THRESHOLD
+        if (areEyesClosed) bothEyesClosedFrames++ else bothEyesClosedFrames = 0
+
+        // Helper text for UI
+        var gestureMessage = "Look Right to Open"
+        if (isInstagramOpen) gestureMessage = "Tilt Head to Scroll\nClose Eyes (0.7s) to Exit"
+
+        // Gesture triggers
+        when {
+            !isInstagramOpen && lookRightFrames >= GESTURE_CONFIRMATION_FRAMES -> {
+                openInstagram()     // Open IG on right look
+                resetGesture(currentTime)
             }
-            lastBlinkTime = currentTime
+            isInstagramOpen && bothEyesClosedFrames >= CLOSE_EYES_CONFIRMATION_FRAMES -> {
+                playbackSound()     // Play exit sound
+                closeInstagram()    // Exit IG
+                resetGesture(currentTime)
+            }
+            isInstagramOpen && lookUpFrames >= GESTURE_CONFIRMATION_FRAMES -> {
+                scrollInstagramDown() // Scroll down
+                resetGesture(currentTime)
+            }
+            isInstagramOpen && lookDownFrames >= GESTURE_CONFIRMATION_FRAMES -> {
+                scrollInstagramUp()   // Scroll up
+                resetGesture(currentTime)
+            }
         }
 
-        if (blinkCount >= 2) {
-            scrollInstagram()
-            blinkCount = 0
-        }
+        updateUIMessage(gestureMessage)
     }
 
-    // --- UI and Navigation Actions ---
+    // Reset counters and update timestamp
+    private fun resetGesture(timestamp: Long) {
+        lastActionTimestamp = timestamp
+        lookRightFrames = 0
+        lookUpFrames = 0
+        lookDownFrames = 0
+        bothEyesClosedFrames = 0
+    }
 
+    // --- Actions ---
     private fun openInstagram() {
         if (!isInstagramOpen && view != null) {
             isInstagramOpen = true
             requireActivity().runOnUiThread {
                 webView.visibility = View.VISIBLE
-                previewView.visibility = View.GONE
+                messageText.visibility = View.VISIBLE
                 webView.loadUrl("https://www.instagram.com")
             }
         }
     }
 
     private fun closeInstagram() {
-        if (view != null) {
-            findNavController().navigate(R.id.homeFragment2)
-        }
+        if (view != null) findNavController().navigate(R.id.homeFragment2)
     }
 
-    private fun scrollInstagram() {
-        if (isInstagramOpen && view != null) {
-            requireActivity().runOnUiThread {
-                webView.evaluateJavascript("window.scrollBy({ top: 500, behavior: 'smooth' });", null)
-            }
-        }
+    private fun scrollInstagramDown() {
+        webView.evaluateJavascript("window.scrollBy({ top: 700, behavior: 'smooth' });", null)
     }
 
+    private fun scrollInstagramUp() {
+        webView.evaluateJavascript("window.scrollBy({ top: -700, behavior: 'smooth' });", null)
+    }
+
+    // --- Helpers ---
     private fun updateUIMessage(message: String) {
-        if (view != null) {
-            requireActivity().runOnUiThread {
-                messageText.text = message
-            }
+        if (view != null && messageText.text != message) {
+            requireActivity().runOnUiThread { messageText.text = message }
         }
     }
 

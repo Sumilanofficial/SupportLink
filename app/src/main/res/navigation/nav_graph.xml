@@ -79,5 +79,22 @@
         android:id="@+id/whatsappFragment2"
         android:name="com.example.gestureflow.WhatsappFragment"
         android:label="WhatsappFragment" />
+    <fragment
+        android:id="@+id/quickDialFragment"
+        android:name="com.example.gestureflow.QuickDialFragment"
+        android:label="fragment_quick_dial"
+        tools:layout="@layout/fragment_quick_dial" />
+    <fragment
+        android:id="@+id/contactSelectionFragment"
+        android:name="com.example.gestureflow.ContactSelectionFragment"
+        android:label="fragment_contact_selection"
+        tools:layout="@layout/fragment_contact_selection" >
+        <action
+            android:id="@+id/action_contactSelectionFragment_to_keyboardFragment"
+            app:destination="@id/keyboardFragment" />
+        <action
+            android:id="@+id/action_contactSelectionFragment_to_messageFragment"
+            app:destination="@id/messageFragment" />
+    </fragment>
 
 </navigation>

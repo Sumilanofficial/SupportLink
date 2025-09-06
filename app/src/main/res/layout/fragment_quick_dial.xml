@@ -5,19 +5,17 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#1C1B1F"
-    tools:context=".CallFragment">
+    tools:context=".QuickDialFragment">
 
-    <!-- Hidden Camera Preview for gesture detection -->
     <androidx.camera.view.PreviewView
-        android:id="@+id/camera_preview"
+        android:id="@+id/camera_preview_quick_dial"
         android:layout_width="1dp"
         android:layout_height="1dp"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- A large, clear display for the number being typed -->
     <TextView
-        android:id="@+id/selectedKey"
+        android:id="@+id/selected_contact_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_margin="16dp"
@@ -25,8 +23,7 @@
         android:backgroundTint="#303030"
         android:gravity="center"
         android:padding="24dp"
-        android:hint="Blink to type number..."
-        android:textColorHint="#CCCCCC"
+        android:text="Blink to Select Contact"
         android:textColor="@android:color/white"
         android:textSize="34sp"
         android:textStyle="bold"
@@ -34,9 +31,8 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <!-- This is where the keyboard sections will be dynamically added -->
     <LinearLayout
-        android:id="@+id/keyboardContainer"
+        android:id="@+id/keyboard_container_quick_dial"
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:layout_marginTop="16dp"
@@ -44,6 +40,6 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/selectedKey" />
+        app:layout_constraintTop_toBottomOf="@id/selected_contact_text" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
