@@ -1,16 +1,16 @@
 package com.example.gestureflow
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.content.pm.PackageManager
-import android.media.MediaPlayer
 import android.os.Bundle
-import android.telephony.SmsManager
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
+import android.Manifest
+import android.content.pm.PackageManager
+import android.media.MediaPlayer
+import android.telephony.SmsManager
+import androidx.core.app.ActivityCompat
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -18,197 +18,180 @@ import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.constraintlayout.widget.ConstraintLayout
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.navigation.fragment.findNavController
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.Face
-import com.google.mlkit.vision.face.FaceDetector
 import com.google.mlkit.vision.face.FaceDetectorOptions
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 
 class KeyboardFragment : Fragment() {
 
-    // --- UI Components ---
     private lateinit var previewView: PreviewView
     private lateinit var selectedText: TextView
     private lateinit var keyboardContainer: ConstraintLayout
-
-    // --- Camera + Face Detection ---
     private lateinit var cameraExecutor: ExecutorService
-    private lateinit var faceDetector: FaceDetector
-
-    // --- Other variables ---
-    private var receiverNumber: String? = null   // Number to send SMS
+    private var lastSelectedSide: String = ""
     private var mediaPlayer: MediaPlayer? = null
-
-    // Button background colors cycling
+    private val receiverNumber = "6239062592" // Replace with the actual number
     private val colors = listOf(
-        R.color.white, R.color.white, R.color.white,
-        R.color.white, R.color.white, R.color.white
+        R.color.white,  // Replace with actual color resources
+        R.color.white,
+        R.color.white,
+        R.color.white,
+        R.color.white,
+        R.color.white
     )
-
-    // Keyboard Layout
     private val keyboardLayout = listOf(
-        "A", "B", "C","D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "A", "B", "C","⌫", "D","Enter", "E", "F", "G", "H", "I", "J", "K", "L", "M",
         "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-        " ", "⌫", "Enter"
+        "⌫", "Enter"
     )
 
-    // Keep track of progressive keyboard states (binary selection)
+
     private val previousStates: MutableList<List<String>> = mutableListOf()
-    private var typedText: String = ""   // Final typed text
+    private var typedText: String = ""
 
-    // --- Gesture Detection State ---
-    private val postSelectionDelay = 300L  // Delay after selection
-    private val blinkThreshold = 0.1f      // Not used directly, but kept for tuning
+    private val postSelectionDelay = 300L
+    private val blinkThreshold = 0.1f
+
     private var lastBlinkTime = 0L
+    private var blinkCount = 0
     private var lastSelectionTime = 0L
-    private var leftBlinkCount = 0
-    private var rightBlinkCount = 0
 
+    // For tracking both eyes closed for 4 seconds
+    private var lastEyeCloseTime = 0L
+    private var isBothEyesClosed = false
 
-    // Inflate the fragment layout
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
     ): View {
         val view = inflater.inflate(R.layout.fragment_keyboard, container, false)
-
-        // Get receiver phone number from arguments
-        arguments?.let {
-            receiverNumber = it.getString("phoneNumber")
-        }
-
-        // Bind UI
         previewView = view.findViewById(R.id.camera_preview)
         selectedText = view.findViewById(R.id.selectedKey)
         keyboardContainer = view.findViewById(R.id.keyboardContainer)
-
-        // Initialize Camera + MLKit
         cameraExecutor = Executors.newSingleThreadExecutor()
-        setupFaceDetector()
         startCamera()
-
-        // Show keyboard layout
         displayKeyboard(keyboardLayout)
-
         return view
     }
 
-    // Release resources
-    override fun onDestroyView() {
-        super.onDestroyView()
-        cameraExecutor.shutdown()
-        faceDetector.close()
-        mediaPlayer?.release()
-    }
-
-    // Setup MLKit Face Detector
-    private fun setupFaceDetector() {
-        val options = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
-            .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
-            .build()
-        faceDetector = com.google.mlkit.vision.face.FaceDetection.getClient(options)
-    }
-
-    // Display keyboard keys (recursive narrowing)
     private fun displayKeyboard(keys: List<String>) {
         keyboardContainer.removeAllViews()
 
-        // If only 1 key left, finalize selection
         if (keys.size == 1) {
-            when (val key = keys.first()) {
-                "⌫" -> if (typedText.isNotEmpty()) typedText = typedText.dropLast(1)
-                "Enter" -> {
-                    sendTextMessage(typedText)
-                    typedText = ""
-                }
-                " " -> typedText += " "
-                else -> typedText += key
+            when (keys.first()) {
+                "⌫" -> typedText = typedText.dropLast(1)
+                "Enter" -> sendTextMessage(typedText) // Send the SMS
+
+                else -> typedText += keys.first()
             }
-
-            // Update UI
-            selectedText.text = typedText
-
-            // Reset and reload full keyboard
+            selectedText.text = "Message: $typedText"
             previousStates.clear()
             displayKeyboard(keyboardLayout)
             return
         }
 
-        // Save current state and split into halves
         previousStates.add(keys)
-        val leftKeys = keys.take(keys.size / 2)
-        val rightKeys = keys.drop(keys.size / 2)
-
-        // Display two sections
+        val leftKeys = keys.filterIndexed { index, _ -> index % 2 == 0 }
+        val rightKeys = keys.filterIndexed { index, _ -> index % 2 != 0 }
         keyboardContainer.addView(createKeySections(leftKeys, rightKeys))
     }
 
-    // Send SMS
+    // Function to move to the next fragment
+    private fun moveToNextFragment() {
+        playbackSound()
+        val navController = findNavController()
+        navController.navigate(R.id.homeFragment2) // Navigate to the Home Fragment
+    }
+
     private fun sendTextMessage(message: String) {
-        if (receiverNumber.isNullOrEmpty()) {
-            Toast.makeText(requireContext(), "Recipient number is missing", Toast.LENGTH_SHORT).show()
-            return
-        }
         if (message.isNotEmpty()) {
-            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) {
+            if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.SEND_SMS)
+                == PackageManager.PERMISSION_GRANTED
+            ) {
                 try {
-                    SmsManager.getDefault().sendTextMessage(receiverNumber, null, message, null, null)
+                    val smsManager = SmsManager.getDefault()
+                    smsManager.sendTextMessage(receiverNumber, null, message, null, null)
+                    Log.d("SMS", "Message sent successfully")
                     Toast.makeText(requireContext(), "Message sent", Toast.LENGTH_SHORT).show()
-                    findNavController().navigate(R.id.homeFragment2)
+
                 } catch (e: Exception) {
                     Log.e("SMS", "Failed to send message: ${e.message}")
                 }
             } else {
-                // Ask permission if not granted
-                ActivityCompat.requestPermissions(requireActivity(), arrayOf(Manifest.permission.SEND_SMS), 1)
+                ActivityCompat.requestPermissions(
+                    requireActivity(),
+                    arrayOf(Manifest.permission.SEND_SMS),
+                    1
+                )
             }
         }
     }
+    private fun playSelectionSound() {
+        mediaPlayer?.release() // Release previous instance if exists
+        mediaPlayer = MediaPlayer.create(requireContext(), R.raw.type) // Load sound file
+        mediaPlayer?.start() // Play sound
+    }
+    private fun playbackSound() {
+        mediaPlayer?.release() // Release previous instance if exists
+        mediaPlayer = MediaPlayer.create(requireContext(), R.raw.backbutton) // Load sound file
+        mediaPlayer?.start() // Play sound
+    }
 
-    // Create two-column keyboard layout
+
     private fun createKeySections(leftKeys: List<String>, rightKeys: List<String>): LinearLayout {
         return LinearLayout(requireContext()).apply {
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.MATCH_PARENT)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
             orientation = LinearLayout.HORIZONTAL
 
-            // Left side -> right blink
             addView(createKeySection(leftKeys, ::selectRightKeys))
 
-            // Divider
+            // Divider between left and right sections
             val divider = View(requireContext()).apply {
-                layoutParams = LinearLayout.LayoutParams(4, LinearLayout.LayoutParams.MATCH_PARENT).apply { setMargins(8, 8, 8, 8) }
+                layoutParams = LinearLayout.LayoutParams(4, LinearLayout.LayoutParams.MATCH_PARENT).apply {
+                    setMargins(8, 8, 8, 8)
+                }
                 setBackgroundColor(android.graphics.Color.GRAY)
             }
             addView(divider)
 
-            // Right side -> left blink
             addView(createKeySection(rightKeys, ::selectLeftKeys))
         }
     }
 
-    // Create a vertical section of keys
     private fun createKeySection(keys: List<String>, onClick: () -> Unit): LinearLayout {
         return LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
             orientation = LinearLayout.VERTICAL
+            setPadding(16, 20, 16, 16) // Add padding
 
-            keys.forEachIndexed { index, key ->
+            keys.forEachIndexed { index, key -> // Using forEachIndexed for better indexing
                 val button = Button(context).apply {
                     text = key
                     textSize = 14f
                     setTextColor(android.graphics.Color.BLACK)
-                    backgroundTintList = ContextCompat.getColorStateList(context, colors[index % colors.size])
-                    background = ContextCompat.getDrawable(context, R.drawable.rounded_button)
+
+                    // Ensure the color index is within bounds
+                    val colorRes = colors[index % colors.size]
+                    backgroundTintList = ContextCompat.getColorStateList(context, colorRes)
+                    background = ContextCompat.getDrawable(context, R.drawable.rounded_button) // Apply rounded design
 
                     layoutParams = LinearLayout.LayoutParams(
-                        LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f
-                    ).apply { setMargins(8, 8, 8, 8) }
-
+                        LinearLayout.LayoutParams.MATCH_PARENT,
+                        120// Adjusted button height
+                    ).apply {
+                        setMargins(8, 8, 8, 8)
+                    }
+                    setPadding(10, 30, 10, 10)
+                    maxLines = 2
                     isAllCaps = false
                     setOnClickListener { onClick() }
                 }
@@ -217,119 +200,108 @@ class KeyboardFragment : Fragment() {
         }
     }
 
-    // Start CameraX + Analyzer
+
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
-
-            val preview = Preview.Builder().build().also { it.setSurfaceProvider(previewView.surfaceProvider) }
-
+            val preview = Preview.Builder().build()
+                .also { it.setSurfaceProvider(previewView.surfaceProvider) }
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .build().also { it.setAnalyzer(cameraExecutor, this::processImageProxy) }
-
-            try {
-                cameraProvider.unbindAll()
-                cameraProvider.bindToLifecycle(viewLifecycleOwner, CameraSelector.DEFAULT_FRONT_CAMERA, preview, imageAnalysis)
-
-                // Hide preview (only used for detection)
-                previewView.visibility = View.INVISIBLE
-            } catch (exc: Exception) {
-                Log.e("CameraX", "Use case binding failed", exc)
-            }
+                .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+                .setTargetResolution(android.util.Size(320, 240))
+                .build().also { it.setAnalyzer(cameraExecutor) { processImageProxy(it) } }
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(
+                viewLifecycleOwner,
+                CameraSelector.DEFAULT_FRONT_CAMERA,
+                preview,
+                imageAnalysis
+            )
+            previewView.visibility = View.INVISIBLE
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
-    // Analyze each frame
-    @SuppressLint("UnsafeOptInUsageError")
+    @OptIn(ExperimentalGetImage::class)
     private fun processImageProxy(imageProxy: ImageProxy) {
-        if (view == null) { imageProxy.close(); return }
-        val mediaImage = imageProxy.image
-        if (mediaImage != null) {
+        imageProxy.image?.let { mediaImage ->
             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
-            faceDetector.process(image)
+            val detector = com.google.mlkit.vision.face.FaceDetection.getClient(
+                FaceDetectorOptions.Builder()
+                    .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
+                    .setClassificationMode(FaceDetectorOptions.CLASSIFICATION_MODE_ALL)
+                    .enableTracking()
+                    .build()
+            )
+            detector.process(image)
                 .addOnSuccessListener { faces -> if (faces.isNotEmpty()) processFaces(faces) }
                 .addOnCompleteListener { imageProxy.close() }
-        } else {
-            imageProxy.close()
-        }
+        } ?: imageProxy.close()
     }
 
-    // Process detected faces + blink gestures
     private fun processFaces(faces: List<Face>) {
-        val face = faces.firstOrNull() ?: return
+        val face = faces[0]
         val leftEyeOpenProb = face.leftEyeOpenProbability ?: 1.0f
         val rightEyeOpenProb = face.rightEyeOpenProbability ?: 1.0f
         val currentTime = System.currentTimeMillis()
 
-        // Avoid too frequent selections
         if (currentTime - lastSelectionTime < postSelectionDelay) return
 
-        val isLeftBlink = leftEyeOpenProb < 0.3
-        val isRightBlink = rightEyeOpenProb < 0.3
+        Log.d("EyeDetection", "Left Eye: $leftEyeOpenProb, Right Eye: $rightEyeOpenProb")
 
-        // Both eyes closed → exit to Home
+        // If both eyes are closed simultaneously, ignore the detection
+        val isLeftBlink = leftEyeOpenProb < blinkThreshold
+        val isRightBlink = rightEyeOpenProb < blinkThreshold
+
         if (isLeftBlink && isRightBlink) {
-            playbackSound(R.raw.backbutton)
-            findNavController().navigate(R.id.homeFragment2)
+            if (!isBothEyesClosed) {
+                lastEyeCloseTime = currentTime
+                isBothEyesClosed = true
+            } else if (currentTime - lastEyeCloseTime >= 500) { // 4 seconds
+                moveToNextFragment() // Navigate to the Home Fragment after 4 seconds
+            }
+            lastBlinkTime = currentTime // Update time to prevent false triggers
             return
+        } else {
+            isBothEyesClosed = false
+            lastEyeCloseTime = 0
         }
 
-        // Double left blink → select right half
-        if (isLeftBlink) {
-            if (currentTime - lastBlinkTime < 700) {
-                leftBlinkCount++
-                if (leftBlinkCount == 2) {
-                    selectRightKeys()
-                    leftBlinkCount = 0
-                }
-            } else {
-                leftBlinkCount = 1
-            }
-            lastBlinkTime = currentTime
-        }
-        // Double right blink → select left half
-        else if (isRightBlink) {
-            if (currentTime - lastBlinkTime < 700) {
-                rightBlinkCount++
-                if (rightBlinkCount == 2) {
-                    selectLeftKeys()
-                    rightBlinkCount = 0
-                }
-            } else {
-                rightBlinkCount = 1
-            }
-            lastBlinkTime = currentTime
-        }
+        if (isLeftBlink) handleBlink(currentTime, ::selectRightKeys)
+        if (isRightBlink) handleBlink(currentTime, ::selectLeftKeys)
     }
 
-    // --- Selection Helpers ---
+    private fun handleBlink(currentTime: Long, selectionAction: () -> Unit) {
+        if (currentTime - lastBlinkTime >= postSelectionDelay) {
+            selectionAction()
+            lastSelectionTime = currentTime
+        }
+        lastBlinkTime = currentTime
+    }
+
     private fun selectLeftKeys() {
         playSelectionSound()
+        // Set a flag that indicates the keys are selected from the left side
         previousStates.lastOrNull()?.let { leftKeys ->
-            displayKeyboard(leftKeys.take(leftKeys.size / 2))
+            displayKeyboard(leftKeys.filterIndexed { index, _ -> index % 2 == 0 })
+            // Remember the selected side (left in this case)
+            lastSelectedSide = "left"
         }
     }
 
     private fun selectRightKeys() {
         playSelectionSound()
+        // Set a flag that indicates the keys are selected from the right side
         previousStates.lastOrNull()?.let { rightKeys ->
-            displayKeyboard(rightKeys.drop(rightKeys.size / 2))
+            displayKeyboard(rightKeys.filterIndexed { index, _ -> index % 2 != 0 })
+            // Remember the selected side (right in this case)
+            lastSelectedSide = "right"
         }
     }
 
-    // Play key press sound
-    private fun playSelectionSound() {
-        mediaPlayer?.release()
-        mediaPlayer = MediaPlayer.create(requireContext(), R.raw.type)
-        mediaPlayer?.start()
-    }
-
-    // Play other sounds (like back button)
-    private fun playbackSound(soundResId: Int) {
-        mediaPlayer?.release()
-        mediaPlayer = MediaPlayer.create(requireContext(), soundResId)
-        mediaPlayer?.start()
+    override fun onDestroyView() {
+        super.onDestroyView()
+        cameraExecutor.shutdown()
     }
 }

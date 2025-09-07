@@ -29,13 +29,15 @@ class InstaFeedFragment : Fragment() {
 
     // --- Threshold Configurations for gestures ---
     companion object {
-        private const val HEAD_TURN_RIGHT_THRESHOLD = -12f   // Head yaw threshold (look right)
-        private const val HEAD_TILT_UP_THRESHOLD = 8f        // Head pitch threshold (look up)
-        private const val HEAD_TILT_DOWN_THRESHOLD = -8f     // Head pitch threshold (look down)
+        // Decreased sensitivity: requires a more pronounced head movement.
+        private const val HEAD_TURN_RIGHT_THRESHOLD = -16f   // Head yaw threshold (look right)
+        private const val HEAD_TILT_UP_THRESHOLD = 12f       // Head pitch threshold (look up)
+        private const val HEAD_TILT_DOWN_THRESHOLD = -12f    // Head pitch threshold (look down)
+
         private const val EYE_CLOSED_THRESHOLD = 0.4f        // Eye closure probability
-        private const val CLOSE_EYES_CONFIRMATION_FRAMES = 18 // ~700ms closed eyes
-        private const val GESTURE_CONFIRMATION_FRAMES = 3     // Frames to confirm gesture
-        private const val ACTION_COOLDOWN_MS = 1500L          // Cooldown (ms) between actions
+        private const val CLOSE_EYES_DURATION_MS = 700L      // Duration (ms) to confirm exit
+        private const val GESTURE_CONFIRMATION_FRAMES = 3    // Frames to confirm gesture
+        private const val ACTION_COOLDOWN_MS = 1500L         // Cooldown (ms) between actions
     }
 
     // --- UI elements ---
@@ -56,7 +58,7 @@ class InstaFeedFragment : Fragment() {
     private var lookRightFrames = 0
     private var lookUpFrames = 0
     private var lookDownFrames = 0
-    private var bothEyesClosedFrames = 0
+    private var eyesClosedTime = 0L // Timer for the "close eyes" gesture
 
     // --- Lifecycle ---
     override fun onCreateView(
@@ -176,15 +178,24 @@ class InstaFeedFragment : Fragment() {
         val headYaw = face.headEulerAngleY   // Left-right head movement
         val headPitch = face.headEulerAngleX // Up-down head movement
 
-        // Count frames for each gesture
+        // Count frames for tilt/turn gestures
         if (headYaw < HEAD_TURN_RIGHT_THRESHOLD) lookRightFrames++ else lookRightFrames = 0
         if (headPitch > HEAD_TILT_UP_THRESHOLD) lookUpFrames++ else lookUpFrames = 0
         if (headPitch < HEAD_TILT_DOWN_THRESHOLD) lookDownFrames++ else lookDownFrames = 0
 
-        // Both eyes closed counter
+        // Manage timer for the "close eyes to exit" gesture
         val areEyesClosed = (face.leftEyeOpenProbability ?: 1f) < EYE_CLOSED_THRESHOLD &&
                 (face.rightEyeOpenProbability ?: 1f) < EYE_CLOSED_THRESHOLD
-        if (areEyesClosed) bothEyesClosedFrames++ else bothEyesClosedFrames = 0
+
+        if (areEyesClosed) {
+            if (eyesClosedTime == 0L) {
+                // Start the timer when eyes are first detected as closed
+                eyesClosedTime = currentTime
+            }
+        } else {
+            // If eyes are open, reset the timer
+            eyesClosedTime = 0L
+        }
 
         // Helper text for UI
         var gestureMessage = "Look Right to Open"
@@ -196,7 +207,7 @@ class InstaFeedFragment : Fragment() {
                 openInstagram()     // Open IG on right look
                 resetGesture(currentTime)
             }
-            isInstagramOpen && bothEyesClosedFrames >= CLOSE_EYES_CONFIRMATION_FRAMES -> {
+            isInstagramOpen && eyesClosedTime != 0L && (currentTime - eyesClosedTime >= CLOSE_EYES_DURATION_MS) -> {
                 playbackSound()     // Play exit sound
                 closeInstagram()    // Exit IG
                 resetGesture(currentTime)
@@ -220,7 +231,7 @@ class InstaFeedFragment : Fragment() {
         lookRightFrames = 0
         lookUpFrames = 0
         lookDownFrames = 0
-        bothEyesClosedFrames = 0
+        eyesClosedTime = 0L // Reset the eye-closure timer after any action
     }
 
     // --- Actions ---

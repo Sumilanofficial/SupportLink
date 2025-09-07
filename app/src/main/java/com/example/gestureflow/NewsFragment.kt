@@ -1,3 +1,4 @@
+
 package com.example.gestureflow
 
 import android.annotation.SuppressLint
@@ -24,72 +25,48 @@ import java.util.concurrent.Executors
 
 class NewsFragment : Fragment() {
 
-    // CameraX preview widget
     private lateinit var previewView: PreviewView
-
-    // TextView to show the currently selected action
     private lateinit var selectedActionText: TextView
-
-    // Layout container where dynamic sections will be displayed
     private lateinit var sectionContainer: ConstraintLayout
-
-    // Executor for running camera tasks on a background thread
     private lateinit var cameraExecutor: ExecutorService
 
-    // Available actions (choices for the user)
     private var actions = listOf("Google News", "BBC")
-
-    // Stack to keep track of previous states (used for navigation by blinks)
     private var previousStates: MutableList<List<String>> = mutableListOf()
 
-    // Blink detection variables
     private var lastBlinkTime: Long = 0
     private var leftBlinkCount = 0
     private var rightBlinkCount = 0
-    private var eyesClosedTime: Long = 0 // Track how long both eyes remain closed
+    private var eyesClosedTime: Long = 0 // Track the time for both eyes being closed
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View? {
         val view = inflater.inflate(R.layout.fragment_news, container, false)
 
-        // Initialize views
         previewView = view.findViewById(R.id.camera_preview)
         selectedActionText = view.findViewById(R.id.selectedWord)
         sectionContainer = view.findViewById(R.id.sectionContainer)
 
-        // Start background thread for camera
         cameraExecutor = Executors.newSingleThreadExecutor()
-
-        // Start CameraX
         startCamera()
-
-        // Display the initial actions
         displaySections(actions)
 
         return view
     }
 
-    /**
-     * Splits actions into two sections (left + right) and displays them as buttons
-     */
     private fun displaySections(actionList: List<String>) {
         sectionContainer.removeAllViews()
 
-        // If only one action left → show it as selected
         if (actionList.size == 1) {
             selectedActionText.text = "Selected Action: ${actionList.first()}"
             return
         }
 
-        // Save current state
         previousStates.add(actionList)
 
-        // Divide actions into left and right halves
         val leftActions = actionList.subList(0, actionList.size / 2)
         val rightActions = actionList.subList(actionList.size / 2, actionList.size)
 
-        // Create horizontal layout for both sections
         val sectionsLayout = LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -98,17 +75,12 @@ class NewsFragment : Fragment() {
             orientation = LinearLayout.HORIZONTAL
         }
 
-        // Add left and right sections
         sectionsLayout.addView(createSection(leftActions))
         sectionsLayout.addView(createSection(rightActions))
 
-        // Add layout to container
         sectionContainer.addView(sectionsLayout)
     }
 
-    /**
-     * Creates a vertical section of buttons for the given actions
-     */
     private fun createSection(actions: List<String>): LinearLayout {
         return LinearLayout(requireContext()).apply {
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 1f)
@@ -119,22 +91,21 @@ class NewsFragment : Fragment() {
             actions.forEach { action ->
                 val button = Button(context).apply {
                     text = action
-                    textSize = 12f // Smaller text
+                    textSize = 12f // Decrease text size
                     setTextColor(android.graphics.Color.BLACK)
                     background = ContextCompat.getDrawable(context, R.drawable.rounded_button)
 
                     layoutParams = LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT,
-                        150 // Button height
+                        150 // Increased height
                     ).apply {
                         setMargins(8, 8, 8, 8)
                     }
 
-                    setPadding(10, 10, 10, 10)
-                    maxLines = 2
-                    isAllCaps = false
+                    setPadding(10, 10, 10, 10) // Adjusted padding
+                    maxLines = 2 // Prevents text cut-off
+                    isAllCaps = false // Keeps original text format
 
-                    // Click fallback (manual selection if needed)
                     setOnClickListener {
                         displaySections(actions)
                     }
@@ -144,20 +115,15 @@ class NewsFragment : Fragment() {
         }
     }
 
-    /**
-     * Start the CameraX preview + face detection
-     */
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(requireContext())
         cameraProviderFuture.addListener({
             val cameraProvider = cameraProviderFuture.get()
 
-            // Camera preview
             val preview = Preview.Builder().build().also {
                 it.setSurfaceProvider(previewView.surfaceProvider)
             }
 
-            // Analyzer for face detection
             val imageAnalysis = ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
                 .build()
@@ -170,27 +136,21 @@ class NewsFragment : Fragment() {
             val cameraSelector = CameraSelector.DEFAULT_FRONT_CAMERA
 
             try {
-                // Unbind previous use cases
                 cameraProvider.unbindAll()
-                // Bind preview + analysis
                 cameraProvider.bindToLifecycle(viewLifecycleOwner, cameraSelector, preview, imageAnalysis)
-                previewView.visibility = View.INVISIBLE // Hide camera preview from UI
+                previewView.visibility = View.INVISIBLE
             } catch (exc: Exception) {
                 Log.e("CameraX", "Use case binding failed", exc)
             }
         }, ContextCompat.getMainExecutor(requireContext()))
     }
 
-    /**
-     * Convert camera frame to ML Kit InputImage and run face detection
-     */
     @androidx.annotation.OptIn(ExperimentalGetImage::class)
     private fun processImageProxy(imageProxy: ImageProxy) {
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
 
-            // Configure face detector
             val options = FaceDetectorOptions.Builder()
                 .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
                 .setLandmarkMode(FaceDetectorOptions.LANDMARK_MODE_ALL)
@@ -199,7 +159,6 @@ class NewsFragment : Fragment() {
 
             val detector = com.google.mlkit.vision.face.FaceDetection.getClient(options)
 
-            // Run detection
             detector.process(image)
                 .addOnSuccessListener { faces ->
                     processFaces(faces)
@@ -212,9 +171,6 @@ class NewsFragment : Fragment() {
         }
     }
 
-    /**
-     * Handles detected faces and blink logic
-     */
     private fun processFaces(faces: List<Face>) {
         if (faces.isNotEmpty()) {
             val face = faces[0]
@@ -222,19 +178,20 @@ class NewsFragment : Fragment() {
             val rightEyeOpenProb = face.rightEyeOpenProbability ?: 1.0f
             val currentTime = System.currentTimeMillis()
 
-            // Detect if both eyes are closed → go back to home
             when {
                 leftEyeOpenProb < 0.3 && rightEyeOpenProb < 0.3 -> {
+                    // Both eyes are closed
                     if (currentTime - eyesClosedTime > 1500) {
-                        navigateToHomeFragment()
+                        navigateToHomeFragment() // Navigate to HomeFragment if both eyes are closed for 4000ms
                     }
                 }
                 else -> {
-                    eyesClosedTime = currentTime // Reset when eyes are open
+                    // Reset the eyes closed time if eyes are open
+                    eyesClosedTime = currentTime
                 }
             }
 
-            // Left eye blink → selects right half
+            // Blink detection for left and right eyes (you can keep your logic for actions as well)
             when {
                 leftEyeOpenProb < 0.3 && rightEyeOpenProb > 0.7 -> {
                     if (currentTime - lastBlinkTime < 700) {
@@ -248,8 +205,6 @@ class NewsFragment : Fragment() {
                     }
                     lastBlinkTime = currentTime
                 }
-
-                // Right eye blink → selects left half
                 rightEyeOpenProb < 0.3 && leftEyeOpenProb > 0.7 -> {
                     if (currentTime - lastBlinkTime < 700) {
                         rightBlinkCount++
@@ -266,9 +221,6 @@ class NewsFragment : Fragment() {
         }
     }
 
-    /**
-     * Select left section (right eye double blink)
-     */
     private fun selectLeftAction() {
         previousStates.lastOrNull()?.let { currentList ->
             if (currentList.size > 1) {
@@ -276,7 +228,6 @@ class NewsFragment : Fragment() {
                 previousStates.add(leftHalf)
                 displaySections(leftHalf)
 
-                // If only one action left, navigate
                 if (leftHalf.size == 1) {
                     navigateToInstagramAction(leftHalf.first())
                 }
@@ -284,9 +235,6 @@ class NewsFragment : Fragment() {
         }
     }
 
-    /**
-     * Select right section (left eye double blink)
-     */
     private fun selectRightAction() {
         previousStates.lastOrNull()?.let { currentList ->
             if (currentList.size > 1) {
@@ -294,7 +242,6 @@ class NewsFragment : Fragment() {
                 previousStates.add(rightHalf)
                 displaySections(rightHalf)
 
-                // If only one action left, navigate
                 if (rightHalf.size == 1) {
                     navigateToInstagramAction(rightHalf.first())
                 }
@@ -302,16 +249,10 @@ class NewsFragment : Fragment() {
         }
     }
 
-    /**
-     * Navigate back to HomeFragment (eyes closed for 1.5s)
-     */
     private fun navigateToHomeFragment() {
         findNavController().navigate(R.id.homeFragment2)
     }
 
-    /**
-     * Navigate based on final selection
-     */
     private fun navigateToInstagramAction(selectedAction: String) {
         when (selectedAction) {
             "Google News" -> findNavController().navigate(R.id.instaReelFragment)

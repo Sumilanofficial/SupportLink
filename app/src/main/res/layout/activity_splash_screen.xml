@@ -26,6 +26,7 @@
         android:id="@+id/designedby"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:visibility="gone"
         android:fontFamily="@font/circularstd_book"
         android:text="Powered by Team SSMA CodeX"
         android:textSize="16sp"

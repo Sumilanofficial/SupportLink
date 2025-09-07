@@ -297,7 +297,7 @@ class HomeFragment : Fragment() {
     // Navigation to corresponding fragments
     private fun navigateToFragment(selectedWord: String) {
         when (selectedWord) {
-            "Open Instagram" -> findNavController().navigate(R.id.instagramFragment)
+            "Open Instagram" -> findNavController().navigate(R.id.instaFeedFragment)
             "Open Text To Voice" -> findNavController().navigate(R.id.textToVoice2Fragment)
             "Open Messages" -> findNavController().navigate(R.id.messageFragment)
             "Open Calls" -> findNavController().navigate(R.id.callFragment)

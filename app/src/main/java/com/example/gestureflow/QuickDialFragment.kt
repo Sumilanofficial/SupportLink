@@ -16,7 +16,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -53,11 +52,10 @@ class QuickDialFragment : Fragment() {
 
     // --- Eye Blink Detection Settings ---
     private val postSelectionDelay = 300L   // delay to avoid multiple fast selections
-    private val blinkThreshold = 0.1f       // threshold for detecting closed eye
+    private val blinkThreshold = 0.1f       // threshold for detecting a single eye wink
     private var lastBlinkTime = 0L
     private var lastSelectionTime = 0L
-    private var lastEyeCloseTime = 0L
-    private var isBothEyesClosed = false
+    private var eyesClosedTime = 0L         // timer for back navigation
 
     private var mediaPlayer: MediaPlayer? = null
 
@@ -234,23 +232,32 @@ class QuickDialFragment : Fragment() {
 
         val leftEyeOpenProb = face.leftEyeOpenProbability ?: 1.0f
         val rightEyeOpenProb = face.rightEyeOpenProbability ?: 1.0f
-        val isLeftBlink = leftEyeOpenProb < blinkThreshold
-        val isRightBlink = rightEyeOpenProb < blinkThreshold
 
-        // Both eyes closed → navigate back home after 2 seconds
-        if (isLeftBlink && isRightBlink) {
-            if (!isBothEyesClosed) {
-                lastEyeCloseTime = currentTime
-                isBothEyesClosed = true
-            } else if (currentTime - lastEyeCloseTime >= 2000) {
+        // --- Back Navigation Logic ---
+        // Check if both eyes are closed to navigate back. This takes priority.
+        val bothEyesClosedThreshold = 0.3f
+        if (leftEyeOpenProb < bothEyesClosedThreshold && rightEyeOpenProb < bothEyesClosedThreshold) {
+            if (eyesClosedTime == 0L) {
+                // If this is the first frame with closed eyes, start the timer
+                eyesClosedTime = currentTime
+            } else if (currentTime - eyesClosedTime >= 2000L) { // Trigger after 2 seconds
                 playbackSound(R.raw.backbutton)
-                findNavController().navigate(R.id.homeFragment2)
+                // Ensure navigation happens on the main thread
+                activity?.runOnUiThread {
+                    findNavController().navigate(R.id.homeFragment2)
+                }
+                eyesClosedTime = 0L // Reset timer to prevent re-triggering
             }
+            // IMPORTANT: Do not process single blinks if both eyes are closed
             return
         } else {
-            isBothEyesClosed = false
-            lastEyeCloseTime = 0
+            // If one or both eyes are open, reset the back navigation timer
+            eyesClosedTime = 0L
         }
+
+        // --- Selection Logic ---
+        val isLeftBlink = leftEyeOpenProb < blinkThreshold
+        val isRightBlink = rightEyeOpenProb < blinkThreshold
 
         // Left blink → pick right side
         if (isLeftBlink) handleBlink(currentTime, ::selectRightKeys)
@@ -258,6 +265,7 @@ class QuickDialFragment : Fragment() {
         // Right blink → pick left side
         if (isRightBlink) handleBlink(currentTime, ::selectLeftKeys)
     }
+
 
     // Prevent multiple triggers by adding delay
     private fun handleBlink(currentTime: Long, selectionAction: () -> Unit) {
