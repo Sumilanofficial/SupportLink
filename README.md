@@ -1,3 +1,17 @@
+(Project is build Completely by me)
+
+⚠️ Important: Grant Permissions Before Use
+Before you can start using Support Link, you will need to grant a few essential permissions. The app will prompt you for these when you first open it.
+
+CAMERA: Essential for tracking your facial gestures.
+
+CALL_PHONE: Required for the Open Call feature to place calls.
+
+SEND_SMS: Needed to send messages via the Messaging feature.
+
+Your privacy is important. All image processing is done in real-time and directly on your device. No images or personal data are ever stored or transmitted.
+
+
 👋 Welcome to Support Link: Hands-Free Android Navigation
 An innovative Android application designed to provide a seamless, hands-free way to interact with your device. Using your phone's front-facing camera and advanced facial recognition, Support Link translates your facial gestures—like eye blinks and head movements—into on-screen actions.
 
@@ -23,19 +37,6 @@ This application is built for accessibility, making it easier for users to perfo
 
 🚀 Instructions for Use
 To ensure the best performance, please follow these general guidelines before you begin.
-
-
-⚠️ Important: Grant Permissions Before Use
-Before you can start using Support Link, you will need to grant a few essential permissions. The app will prompt you for these when you first open it.
-
-CAMERA: Essential for tracking your facial gestures.
-
-CALL_PHONE: Required for the Open Call feature to place calls.
-
-SEND_SMS: Needed to send messages via the Messaging feature.
-
-Your privacy is important. All image processing is done in real-time and directly on your device. No images or personal data are ever stored or transmitted.
-
 
 
 
