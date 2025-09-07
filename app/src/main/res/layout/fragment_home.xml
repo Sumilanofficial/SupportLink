@@ -29,7 +29,7 @@
         android:layout_height="0dp"
         android:gravity="center"
         style="@style/CustomLow"
-        android:text="&quot;Blink Your left Eye if you see your option at the left&quot;"
+        android:text="Blink Your left Eye if you see your option at the left"
         app:layout_constraintBottom_toBottomOf="@+id/lottieAnimationView"
         app:layout_constraintEnd_toEndOf="@+id/lottieAnimationView"
         app:layout_constraintHorizontal_bias="1.0"
@@ -40,7 +40,7 @@
         android:layout_width="177dp"
         android:layout_height="0dp"
         android:gravity="center"
-        android:text="&quot;Blink Your left Eye if you see your option at the left&quot;"
+        android:text="Blink Your Right Eye if you see your option at the Right"
         app:layout_constraintBottom_toBottomOf="@+id/lottieAnimationView2"
         app:layout_constraintEnd_toEndOf="@+id/lottieAnimationView2"
         app:layout_constraintStart_toStartOf="@+id/lottieAnimationView2" />
